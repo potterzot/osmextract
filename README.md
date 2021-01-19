@@ -20,10 +20,10 @@ premier source of freely available, community created geographic data
 worldwide. We aim to enable you to extract it for data-driven work in
 the public interest.
 
-`osmextract` downloads, converts and imports bulk OSM data hosted by
-providers such as [Geofabrik GmbH](http://download.geofabrik.de) and
+`osmextract` finds, downloads, converts and imports bulk OSM data hosted
+by providers such as [Geofabrik GmbH](http://download.geofabrik.de) and
 [bbbike](https://download.bbbike.org/osm/). For information on
-alternatives and how to add them see the [providers
+alternative providers and how to add them see the [providers
 vignette](https://itsleeds.github.io/osmextract/articles/providers.html).
 
 ## Why osmextract?
@@ -52,10 +52,10 @@ The query stops with an error message after around 30 seconds. The same
 query can be made with `osmextract` as follows, which reads-in almost
 100k linestrings in less than 10 seconds, after the data has been
 downloaded in the compressed `.pbf` format and converted to the open
-standard `.gpkg` format. The download-conversion operation of the OSM
-extract associated to England takes approximately a few minutes, and
+standard `.gpkg` format. The download-and-conversion operation of the
+OSM extract associated to England takes approximately a few minutes, but
 this operation must be executed only once. The following code chunk is
-not evaluated:
+not evaluated.
 
 ``` r
 library(osmextract)
@@ -107,10 +107,7 @@ Load the package with:
 ``` r
 library(osmextract)
 #> Data (c) OpenStreetMap contributors, ODbL 1.0. https://www.openstreetmap.org/copyright.
-#> Any product made from OpenStreetMap must cite OSM as the data source.
-#> Geofabrik data are taken from https://download.geofabrik.de/
-#> For usage details of bbbike data see https://download.bbbike.org/osm/
-#> OpenStreetMap_fr data are taken from http://download.openstreetmap.fr/
+#> Check the package website, itsleeds.github.io/osmextract, for more details.
 ```
 
 To use alongside functionality in the `sf` package, we also recommend
@@ -130,7 +127,9 @@ The functions defined in this package may return a warning message like
 if the user is running an old version of GDAL (\<= 3.0.0) or PROJ (\<=
 6.0.0). See [here](https://github.com/r-spatial/sf/issues/1419) for more
 details. Nevertheless, every function should still work correctly.
-Please, raise a new issue if you find any odd behaviour.
+Please, raise [a new
+issue](https://github.com/ITSLeeds/osmextract/issues) if you find any
+odd behaviour.
 
 ## Basic usage
 
@@ -144,12 +143,12 @@ already downloaded) and reads-in data from OSM extract providers as an
 layer can be read-in by changing the `layer` argument:
 
 ``` r
-osm_lines = oe_get("Isle of Wight", stringsAsFactors = FALSE)
-osm_points = oe_get("Isle of Wight", layer = "points", stringsAsFactors = FALSE)
+osm_lines = oe_get("Isle of Wight", stringsAsFactors = FALSE, quiet = TRUE)
+osm_points = oe_get("Isle of Wight", layer = "points", stringsAsFactors = FALSE, quiet = TRUE)
 nrow(osm_lines)
-#> [1] 45265
+#> [1] 45621
 nrow(osm_points)
-#> [1] 59251
+#> [1] 59085
 par(mar = rep(0, 4))
 plot(st_geometry(osm_lines), xlim = c(-1.59, -1.1), ylim = c(50.5, 50.8))
 plot(st_geometry(osm_points), xlim = c(-1.59, -1.1), ylim = c(50.5, 50.8))
@@ -168,13 +167,13 @@ names(osm_lines) # default variable names
 #>  [6] "barrier"    "man_made"   "z_order"    "other_tags" "geometry"
 ```
 
-Once imported, you can use all the functions for data frames in base R
-and other packages. We can also use functions from the `sf` package for
+Once imported, you can use all functions for data frames in base R and
+other packages. You can also use functions from the `sf` package for
 spatial analysis and visualisation. Let’s plot all the major, secondary
 and residential roads, for example:
 
 ``` r
-ht = c("primary", "secondary", "residential", "tertiary") # highway types of interest
+ht = c("primary", "secondary", "tertiary", "unclassified") # highway types of interest
 osm_major_roads = osm_lines[osm_lines$highway %in% ht, ]
 plot(osm_major_roads["highway"], key.pos = 1)
 ```
@@ -184,10 +183,25 @@ plot(osm_major_roads["highway"], key.pos = 1)
 The same steps can be used to get other OSM datasets (examples not run):
 
 ``` r
-test_malta = oe_get("Malta", quiet = TRUE)
-test_andorra = oe_get("Andorra", extra_tags = "ref")
-test_leeds <- oe_get("Leeds", provider = "bbbike")
-test_india_region <- oe_get("Goa", provider = "openstreetmap_fr")
+malta = oe_get("Malta", quiet = TRUE)
+andorra = oe_get("Andorra", extra_tags = "ref")
+leeds = oe_get("Leeds")
+goa = oe_get("Goa", query = "SELECT highway, geometry FROM 'lines'")
+```
+
+If the input place does not match any of the existing names in the
+supported providers, then `oe_get()` will try to geocode it via
+[Nominatim
+API](https://nominatim.org/release-docs/develop/api/Overview/), and it
+will select the smallest OSM extract intersecting the area. For example
+(not run):
+
+``` r
+oe_get("Milan") # Warning: It will download more than 400MB of data
+#> No exact match found for place = Milan and provider = geofabrik. Best match is Iran.
+#> Checking the other providers.
+#> No exact match found in any OSM provider data. Searching for the location online.
+#> ... (extra messages here)
 ```
 
 For further details on using the package, see the [Introducing
@@ -255,6 +269,10 @@ states that
 
   - 2.  A later version of this License similar in spirit to this
 
+See the [Introducing osmextract
+vignette](https://itsleeds.github.io/osmextract/articles/osmextract.html)
+for more details.
+
 ## Other approaches
 
 <!-- todo: add links to other packages -->
@@ -276,6 +294,17 @@ states that
     is an established spatial database that works well with large OSM
     datasets
   - Any others? Let us know\!
+
+## Contribution
+
+We very much look forward to comments, questions and contributions. If
+you have any doubt, or if you want to suggest a new approach or add a
+new OSM provider, feel free to create a new issue in the [issue
+tracker](https://github.com/ITSLeeds/osmextract/issues) or a new [pull
+request](https://github.com/ITSLeeds/osmextract/pulls). We always try to
+build the most intuitive user interface and write the most informative
+error messages, but if you think that something is not clear and could
+have been explained better, please let us know.
 
 <!-- :) -->
 

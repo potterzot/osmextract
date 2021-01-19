@@ -33,7 +33,7 @@ test_that("oe_match: sfc_POINT objects", {
     sf::st_point(c(4.988327, 52.260453)),
     crs = 4326
   )
-  # the point is midway between amsterdam and utrecth, closer to Amsterdam, and
+  # The point is midway between amsterdam and utrecth, closer to Amsterdam, and
   # it intersects both bboxes
   expect_message(oe_match(
     amsterdam_utrecht,
@@ -50,12 +50,14 @@ test_that("oe_match: numeric input", {
   expect_match(oe_match(c(9.1916, 45.4650))$url, "italy")
 })
 
-test_that("oe_match: different providers, match_by or max_string dist args", {
+test_that("oe_match: different providers, match_by or max_string_dist args", {
   expect_error(oe_match("Italy", provider = "XXX"))
   expect_error(oe_match("Italy", match_by = "XXX"))
   expect_match(oe_match("RU", match_by = "iso3166_1_alpha2")$url, "russia")
 
-  expect_error(oe_match("Isle Wight"))
+  # expect_null(oe_match("Isle Wight"))
+  # The previous test was removed in #155 since now oe_match calls nominatim servers in
+  # case it doesn't find an exact match, so it should never return NULL
   expect_match(oe_match("Isle Wight", max_string_dist = 3)$url, "isle-of-wight")
   expect_message(oe_match("London", max_string_dist = 3, quiet = FALSE))
 
@@ -69,9 +71,11 @@ test_that("oe_match: Cannot specify more than one place", {
   expect_error(oe_match("Italy", "Spain"))
 
   # sfc_POINT
-  milan_duomo = sf::st_sfc(sf::st_point(c(1514924, 5034552)), crs = 3003)
-  leeds = sf::st_sfc(sf::st_point(c(430147.8, 433551.5)), crs = 27700)
-  expect_error(oe_match(c(milan_duomo, leeds)))
+  milan_duomo = sf::st_sfc(sf::st_point(c(1514924, 5034552)), crs = 3003) %>%
+    sf::st_transform(4326)
+  leeds = sf::st_sfc(sf::st_point(c(430147.8, 433551.5)), crs = 27700) %>%
+    sf::st_transform(4326)
+  # expect_error(oe_match(c(milan_duomo, leeds)))
   expect_error(oe_match(milan_duomo, leeds))
 
   # numeric
@@ -84,4 +88,51 @@ test_that("oe_check_pattern: simplest examples work", {
   expect_error(oe_match_pattern("Yorkshire"), regexp = NA)
   expect_error(oe_match_pattern("Yorkshire", full_row = TRUE), regexp = NA)
   expect_error(oe_match_pattern("Yorkshire", match_by = "XXX"))
+})
+
+test_that("oe_match can use different providers", {
+  expect_match(
+    oe_match("leeds", quiet = TRUE)$url,
+    "bbbike/Leeds/Leeds\\.osm\\.pbf"
+  )
+})
+
+test_that("oe_match looks for a place location online", {
+  expect_match(
+    oe_match("Olginate", quiet = TRUE)$url,
+    "italy/nord-ovest-latest\\.osm\\.pbf"
+  )
+})
+
+test_that("oe_match: error when input place is far from all zones and match_by != name", {
+  expect_error(oe_match("PS", match_by = "iso3166_1_alpha2"), "No tolerable match was found")
+})
+
+test_that("oe_match: test level parameter", {
+  # See https://github.com/ITSLeeds/osmextract/issues/160
+  yak <- c(-120.51084, 46.60156)
+
+  expect_equal(
+    oe_match(yak, level = 1)$url,
+    "https://download.geofabrik.de/north-america-latest.osm.pbf"
+  )
+  expect_equal(
+    oe_match(yak)$url,
+    "https://download.geofabrik.de/north-america/us/washington-latest.osm.pbf"
+  )
+  expect_error(
+    oe_match(yak, level = 3),
+    "The input place does not intersect any area at the chosen level."
+  )
+})
+
+test_that("oe_match:sfc objects with multiple places", {
+  milan_duomo = sf::st_sfc(sf::st_point(c(1514924, 5034552)), crs = 3003) %>%
+    sf::st_transform(4326)
+  leeds = sf::st_sfc(sf::st_point(c(430147.8, 433551.5)), crs = 27700) %>%
+    sf::st_transform(4326)
+  expect_match(
+    oe_match(c(milan_duomo, leeds))$url,
+    "https://download.geofabrik.de/europe-latest.osm.pbf"
+  )
 })

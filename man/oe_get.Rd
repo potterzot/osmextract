@@ -2,7 +2,7 @@
 % Please edit documentation in R/get.R
 \name{oe_get}
 \alias{oe_get}
-\title{Download, translate and read OSM extracts from several providers}
+\title{Find, download, translate and read OSM extracts from several providers}
 \usage{
 oe_get(
   place,
@@ -11,7 +11,7 @@ oe_get(
   provider = "geofabrik",
   match_by = "name",
   max_string_dist = 1,
-  interactive_ask = FALSE,
+  level = NULL,
   download_directory = oe_download_directory(),
   force_download = FALSE,
   max_file_size = 5e+08,
@@ -28,17 +28,21 @@ oe_get(
 \arguments{
 \item{place}{Description of the geographical area that should be matched with
 a \code{.osm.pbf} file through the chosen \code{provider}. Can be either a length-1
-character vector, a length-1 \code{sfc_POINT} object or a numeric vector of
-coordinates with length 2. In the latter case it is assumed that the EPSG
-code is 4326 specified as c(LON, LAT), while you can use any EPSG code with
-an \code{sfc_POINT} object. See Details and examples in \code{\link[=oe_match]{oe_match()}}.}
+character vector, an \code{sf} or \code{sfc} object, or a numeric vector of
+coordinates with length 2. In the last case, it is assumed that the EPSG
+code is 4326 specified as c(LON, LAT), while you can use any CRS with an
+\code{sf} or \code{sfc} object. See Details and examples in \code{\link[=oe_match]{oe_match()}}.}
 
 \item{layer}{Which \code{layer} should be read in? Typically \code{points}, \code{lines}
-(the default), \code{multilinestrings}, \code{multipolygons} or \code{other_relations}.}
+(the default), \code{multilinestrings}, \code{multipolygons} or \code{other_relations}. If
+you specify an ad-hoc query using the argument \code{query} (see introductory
+vignette and examples), then \code{oe_get()} and \code{oe_read()} will read the layer
+specified in the query and ignore \code{layer}. See also
+\href{https://github.com/ITSLeeds/osmextract/issues/122}{#122}.}
 
-\item{...}{Arguments that will be passed to \code{\link[sf:st_read]{sf::st_read()}}, like \code{query}
-or \code{stringsAsFactors}.  Check the introductory vignette to understand how
-to create your own (SQL-like) queries.}
+\item{...}{Arguments that will be passed to \code{\link[sf:st_read]{sf::st_read()}}, like \code{query},
+\code{wkt_filter} or \code{stringsAsFactors}.  Check the introductory vignette to
+understand how to create your own (SQL-like) queries.}
 
 \item{provider}{Which provider should be used to download the data? Available
 providers can be found with the following command: \code{\link[=oe_providers]{oe_providers()}}. For
@@ -47,7 +51,7 @@ providers can be found with the following command: \code{\link[=oe_providers]{oe
 internal testings.}
 
 \item{match_by}{Which column of the provider's database should be used for
-matching the input \code{place} with a \code{.osm.pbf} file? The default is "name".
+matching the input \code{place} with a \code{.osm.pbf} file? The default is \code{"name"}.
 Check Details and Examples in \code{\link[=oe_match]{oe_match()}} to understand how this parameter
 works. Ignored if \code{place} is not a character vector since the matching is
 performed through a spatial operation.}
@@ -55,24 +59,26 @@ performed through a spatial operation.}
 \item{max_string_dist}{Numerical value greater or equal than 0. What is the
 maximum distance in fuzzy matching (i.e. Approximate String Distance, see
 \code{\link[=adist]{adist()}}) between input \code{place} and \code{match_by} column to tolerate before
-asking the user to select which zone to download? This parameter is set
-equal to 0 if \code{match_by} is equal to \code{iso3166_1_alpha2} or \code{iso3166_2}.
-Check Details and Examples in \code{\link[=oe_match]{oe_match()}} to understand why this parameter
-is important. Ignored if \code{place} is not a character vector since the
-matching is performed through a spatial operation.}
+testing alternative providers or looking for geographical matching with
+Nominatim API? This parameter is set equal to 0 if \code{match_by} is equal to
+\code{iso3166_1_alpha2} or \code{iso3166_2}. Check Details and Examples in
+\code{\link[=oe_match]{oe_match()}} to understand why this parameter is important. Ignored if
+\code{place} is not a character vector since the matching is performed through a
+spatial operation.}
 
-\item{interactive_ask}{Boolean. If \code{TRUE} the function creates an interactive
-menu in case the best match is further than \code{max_string_dist}, otherwise it
-fails with \code{stop()}. Check details and examples in \code{\link[=oe_match]{oe_match()}} to
-understand why this parameter is important. Ignored if \code{place} is not a
-character vector since the matching is performed through a spatial
-operation.}
+\item{level}{An integer representing the desired hierarchical level in case
+of spatial matching. For the \code{geofabrik} provider, for example, \code{1}
+corresponds with continent-level datasets, \code{2} for countries, \code{3}
+corresponds to regions and \code{4} to subregions. Hence, we could approximately
+say that smaller administrative units correspond to bigger levels. If
+\code{NULL}, the default, the \verb{oe_*} functions will select the highest available
+level. See Details and Examples in \code{oe_match()}.}
 
 \item{download_directory}{Where to download the file containing the OSM data?
 By default this is equal to \code{\link[=oe_download_directory]{oe_download_directory()}}, which is equal to
 \code{\link[=tempdir]{tempdir()}} and it changes each time you restart R. You can set a
 persistent \code{download_directory} by adding the following to your \code{.Renviron}
-file (e.g. with \code{\link[usethis:edit]{usethis::edit_r_environ()}}):
+file (e.g. with \code{edit_r_environ} function in \code{usethis} package):
 \verb{OSMEXT_DOWNLOAD_DIRECTORY=/path/to/osm/data}.}
 
 \item{force_download}{Should the \code{.osm.pbf} file be updated if it has already
@@ -82,58 +88,56 @@ been downloaded? \code{FALSE} by default. This parameter is used to update old
 \item{max_file_size}{The maximum file size to download without asking in
 interactive mode. Default: \code{5e+8}, half a gigabyte.}
 
-\item{vectortranslate_options}{Options to pass to the \code{\link[sf:gdal_utils]{sf::gdal_utils()}}
-argument \code{options}. Set by default. Check Details in the introductory
-vignette and in \code{\link[=oe_vectortranslate]{oe_vectortranslate()}}.}
+\item{vectortranslate_options}{Options passed to the \code{\link[sf:gdal_utils]{sf::gdal_utils()}}
+argument \code{options}. Set by default. Check details in the introductory
+vignette and the help page of \code{\link[=oe_vectortranslate]{oe_vectortranslate()}}.}
 
-\item{osmconf_ini}{The configuration file specifying which columns should be
-in the resulting data frame. See documentation at
-\href{https://gdal.org/drivers/vector/osm.html}{gdal.org}. Check Details in
-\code{\link[=oe_vectortranslate]{oe_vectortranslate()}}.}
+\item{osmconf_ini}{The configuration file. See documentation at
+\href{https://gdal.org/drivers/vector/osm.html}{gdal.org}. Check details in the
+introductory vignette and the help page of \code{\link[=oe_vectortranslate]{oe_vectortranslate()}}. Set by
+default.}
 
 \item{extra_tags}{Which additional columns, corresponding to OSM tags, should
-be in the resulting dataset? \code{FALSE} by default. Check Details at
-\code{\link[=oe_vectortranslate]{oe_vectortranslate()}} and \code{\link[=oe_get_keys]{oe_get_keys()}}. Ignored when \code{osmconf_ini} is
-not \code{NULL}.}
+be in the resulting dataset? \code{NULL} by default. Check the introductory
+vignette and the help pages of \code{\link[=oe_vectortranslate]{oe_vectortranslate()}} and \code{\link[=oe_get_keys]{oe_get_keys()}}.
+Ignored when \code{osmconf_ini} is not \code{NULL}.}
 
 \item{force_vectortranslate}{Boolean. Force the original \code{.pbf} file to be
 translated into a \code{.gpkg} file, even if a \code{.gpkg} with the same name
-already exists? Check Details at \code{\link[=oe_vectortranslate]{oe_vectortranslate()}} .}
+already exists? Check the introductory vignette and the help page of
+\code{\link[=oe_vectortranslate]{oe_vectortranslate()}}.}
 
-\item{download_only}{Boolean. If \code{TRUE} then the function only returns the
+\item{download_only}{Boolean. If \code{TRUE}, then the function only returns the
 path where the matched file is stored, instead of reading it. \code{FALSE} by
 default.}
 
-\item{skip_vectortranslate}{Boolean. If \code{TRUE} then the function skips all
-vectortranslate operations and it reads (or simply returns the path) of
-the \code{.osm.pbf} file. \code{FALSE} by default.}
+\item{skip_vectortranslate}{Boolean. If \code{TRUE}, then the function skips all
+vectortranslate operations and it reads (or simply returns the path) of the
+\code{.osm.pbf} file. \code{FALSE} by default.}
 
 \item{never_skip_vectortranslate}{Boolean. This is used in case the user
 passed its own \code{.ini} file or vectortranslate options (since, in those case,
 it's too difficult to determine if an existing \code{.gpkg} file was generated
 following the same options.)}
 
-\item{quiet}{Boolean. If \code{FALSE} the function prints informative messages.
+\item{quiet}{Boolean. If \code{FALSE}, the function prints informative messages.
 Starting from \code{sf} version
 \href{https://r-spatial.github.io/sf/news/index.html#version-0-9-6-2020-09-13}{0.9.6},
 if \code{quiet} is equal to \code{FALSE}, then vectortranslate operations will
 display a progress bar.}
 }
 \value{
-An sf object.
+An \code{sf} object.
 }
 \description{
-This function is used to download, translate and read OSM extracts obtained
-from several providers. It is a wrapper around \code{\link[=oe_match]{oe_match()}} and \code{\link[=oe_read]{oe_read()}}.
-Check the introductory vignette, the examples and the help pages of the
-wrapped functions to understand the details behind all parameters.
+This function is used to find, download, translate and read OSM extracts
+obtained from several providers. It is a wrapper around \code{\link[=oe_match]{oe_match()}} and
+\code{\link[=oe_read]{oe_read()}}. Check the introductory vignette, the examples and the help pages
+of the wrapped functions to understand the details behind all parameters.
 }
 \details{
-To learn how to use the \code{query} argument, for example, see the
-\href{https://itsleeds.github.io/osmextract/articles/osmextract.html#query}{query section of the osmextract vignette}.
-
 The algorithm that we use for importing an OSM extract data into R
-is divided into 4 steps: 1) Matching the input \code{place} with the url of a
+is divided into 4 steps: 1) match the input \code{place} with the url of a
 \code{.pbf} file; 2) download the \code{.pbf} file; 3) convert it into \code{.gpkg} format
 and 4) read-in the \code{.gpkg} file. The function \code{oe_match()} is used to
 perform the first operation and the function \code{oe_read()} (which is a
@@ -158,18 +162,24 @@ oe_get("ITS Leeds", download_only = TRUE, skip_vectortranslate = TRUE)
 # Add additional tags
 its_with_oneway = oe_get("ITS Leeds", extra_tags = "oneway", quiet = FALSE)
 names(its_with_oneway)
-table(its_with_oneway$oneway)
+table(its_with_oneway$oneway, useNA = "ifany")
 
 # Use the query argument to get only oneway streets:
 q = "SELECT * FROM 'lines' WHERE oneway IN ('yes')"
-its_residential = oe_get("ITS Leeds", query = q)
-its_residential
+its_oneway = oe_get("ITS Leeds", query = q)
+its_oneway
 
 \dontrun{
 # A more complex example
 west_yorkshire = oe_get("West Yorkshire", quiet = FALSE)
-# If you run it again, the function will not download the file or convert it
+# If you run it again, the function will not download the file
+# or convert it again
 west_yorkshire = oe_get("West Yorkshire", quiet = FALSE)
+# Match with place name
+oe_get("Milan") # Warning: the .pbf file is 400MB
+oe_get("Vatican City")
+oe_get("Zurich")
+
 # Match with coordinates (any EPSG)
 milan_duomo = sf::st_sfc(sf::st_point(c(1514924, 5034552)), crs = 3003)
 oe_get(milan_duomo, quiet = FALSE) # Warning: the .pbf file is 400MB

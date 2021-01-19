@@ -1,27 +1,27 @@
-#' Read a .pbf or .gpkg object from file or URL
+#' Read a .pbf or .gpkg object from file or url
 #'
 #' This function is used to read a `.pbf` or `.gpkg` object from file or URL. It
-#' is a wrapper around [oe_download()], [oe_vectortranslate()] and
+#' is a wrapper around [oe_download()], [oe_vectortranslate()], and
 #' [sf::st_read()], creating an easy way to download, convert, and read a `.pbf`
 #' or `.gpkg` file. Check the introductory vignette and the help pages of the
 #' wrapped function for more details.
-#'
 #'
 #' @details The arguments `provider`, `download_directory`, `file_size`,
 #'   `force_download`, and `max_file_size` are ignored if `file_path` points to
 #'   an existing `.pbf` or `.gpkg` file.
 #'
-#'   You cannot add any layer to an existing `.gpkg` file but you can extract
-#'   some of the tags in `other_tags` field. Check [oe_get_keys()] for more
-#'   details.
+#'   You cannot add any field or layer to an existing `.gpkg` file (unless you
+#'   have the `.pbf` file and you convert it again with a different
+#'   configuration), but you can extract some of the tags in `other_tags` field.
+#'   Check examples and [oe_get_keys()] for more details.
 #'
 #' @inheritParams oe_get
-#' @param file_path A url or the path of a `.pbf` or `.gpkg` file. If it is a
-#'   URL it must be specified using HTTP/HTTPS protocol.
+#' @param file_path A URL or the path of a `.pbf` or `.gpkg` file. If a URL,
+#'   then it must be specified using HTTP/HTTPS protocol.
 #' @param file_size How big is the file? Optional. `NA` by default. If it's
 #'   bigger than `max_file_size` and the function is run in interactive mode,
-#'   then an interactive menu is displayed, asking for permission for
-#'   downloading the file.
+#'   then an interactive menu is displayed, asking for permission to download
+#'   the file.
 #'
 #' @return An `sf` object.
 #' @export
@@ -29,17 +29,27 @@
 #' @examples
 #' # Read an existing .pbf file
 #' my_pbf = system.file("its-example.osm.pbf", package = "osmextract")
-#' oe_read(my_pbf, quiet = FALSE)
-#' oe_read(my_pbf, layer = "points", quiet = FALSE) # Read a new layer
+#' oe_read(my_pbf)
+#' oe_read(my_pbf, layer = "points") # Read a new layer
 #' # The following example shows how to add new tags
 #' oe_read(my_pbf, extra_tags = c("oneway", "ref"), quiet = FALSE)
 #'
 #' # Read an existing .gpkg file. This file was created by oe_read
 #' my_gpkg = system.file("its-example.gpkg", package = "osmextract")
-#' oe_read(my_gpkg, quiet = FALSE)
+#' oe_read(my_gpkg)
 #' # You cannot add any layer to an existing .gpkg file but you can extract some
 #' # of the tags in other_tags. Check oe_get_keys() for more details.
-#' names(oe_read(my_gpkg, extra_tags = c("maxspeed")))
+#' names(oe_read(my_gpkg, extra_tags = c("maxspeed"))) # doesn't work
+#' # Instead, use the query argument
+#' names(oe_read(
+#'   my_gpkg,
+#'   quiet = TRUE,
+#'   query =
+#'   "SELECT *,
+#'   hstore_get_value(other_tags, 'maxspeed') AS maxspeed
+#'   FROM lines
+#'   "
+#' ))
 #' # Delete the .gpkg file not to mess with other examples
 #' file.remove(my_gpkg)
 #'
@@ -72,6 +82,54 @@ oe_read = function(
   # Test misspelt arguments
   check_layer_provider(layer, provider)
 
+  # Test if there is misalignment between query and layer. See also
+  # See https://github.com/ITSLeeds/osmextract/issues/122
+  if ("query" %in% names(list(...))) {
+    # Check if the query argument defined in sf::st_read was defined using a
+    # layer different than layer argument.
+    # Extracted from sf::st_read docs: For query with a character dsn the query
+    # text is handed to 'ExecuteSQL' on the GDAL/OGR data set and will result in
+    # the creation of a new layer (and layer is ignored) See also
+    # https://github.com/ITSLeeds/osmextract/issues/122
+    query = list(...)[["query"]]
+
+    # Extract everything that is specified after FROM or from
+    query_pattern = "(?<=(FROM|from))\\s*\\S+"
+    layer_raw = regmatches(query, regexpr(query_pattern, query, perl = TRUE))
+
+    if (length(layer_raw) != 1L) {
+      stop(
+        "There is an error in the query. Please open a new issue at ",
+        "https://github.com/ITSLeeds/osmextract/issues",
+        call. = FALSE
+      )
+    }
+
+    # Clean all extra text (such as ' or ")
+    layer_clean = regmatches(
+      layer_raw[[1]],
+      gregexpr("\\w+", layer_raw[[1]], perl = TRUE)
+    )
+
+    if (length(layer_clean) != 1L) {
+      stop(
+        "There is an error in the query. Please open a new issue at ",
+        "https://github.com/ITSLeeds/osmextract/issues",
+        call. = FALSE
+      )
+    }
+
+    if (layer_clean[[1]] != layer) {
+      warning(
+        "The query selected a layer which is different from layer argument. ",
+        "We will ignore the layer argument.",
+        call. = FALSE,
+        immediate. = TRUE
+      )
+      layer = layer_clean[[1]]
+    }
+  }
+
   # See https://github.com/ITSLeeds/osmextract/issues/114
   if (
     # The following condition checks if the user passed down one or more
@@ -87,7 +145,13 @@ oe_read = function(
     # use names(formals("st_read.character", envir = getNamespace("sf")))
     any(
       names(list(...)) %!in%
-      names(formals(get("st_read.character", envir = getNamespace("sf"))))
+      # The ... arguments in st_read are passed to st_as_sf so I need to add the
+      # formals of st_as_sf.
+      # See https://github.com/ITSLeeds/osmextract/issues/152
+      union(
+        names(formals(get("st_read.character", envir = getNamespace("sf")))),
+        names(formals(get("st_as_sf.data.frame", envir = getNamespace("sf"))))
+      )
     )
   ) {
     warning(
@@ -120,7 +184,10 @@ oe_read = function(
 
     # Add an if clause to check if file_path "looks like" a URL
     # See https://github.com/ITSLeeds/osmextract/issues/134 and
-    # https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url
+    # https://stackoverflow.com/questions/3809401/what-is-a-good-regular-expression-to-match-a-url.
+    # First I need to remove the whitespace at the end of the URL
+    # See https://github.com/ITSLeeds/osmextract/issues/163
+    file_path = trimws(file_path)
     like_url = is_like_url(file_path)
 
     if (!like_url) {
@@ -194,7 +261,6 @@ oe_read = function(
   if (isTRUE(download_only)) {
     return(gpkg_file_path)
   }
-
 
   # Read the translated file with sf::st_read
   sf::st_read(

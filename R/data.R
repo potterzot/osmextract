@@ -8,27 +8,27 @@
 #' @format An sf object with `r nrow(geofabrik_zones)` rows and
 #' `r ncol(geofabrik_zones)` columns:
 #' \describe{
-#'   \item{id}{A unique identifier, contains letters, numbers and potentially
+#'   \item{id}{A unique identifier. It contains letters, numbers and potentially
 #'   the characters "-" and "/".}
 #'   \item{name}{The, usually English, long-form name of the area.}
 #'   \item{parent}{The identifier of the next larger excerpts that contains this
 #'   one, if present.}
-#'   \item{level}{An integer code between 1 and 3. If level = 1 then the zone
+#'   \item{level}{An integer code between 1 and 4. If level = 1 then the zone
 #'   corresponds to one of the continents plus the Russian Federation: Africa,
 #'   Antarctica, Asia, Australia and Oceania, Central America, Europe, North
 #'   America, Russian Federation and South America. If level = 2 then the zone
 #'   corresponds to the continent's subregions (i.e. the countries, such as
 #'   Italy, Great Britain, Spain, USA, Mexico, Belize, Morocco, Peru and so on).
 #'   There are also some exceptions that correspond to the Special Sub Regions
-#'   (according to their geofabrik definition), which are: South Africa
+#'   (according to their Geofabrik definition), which are: South Africa
 #'   (includes Lesotho), Alps, Britain and Ireland, Germany + Austria +
 #'   Switzerland, US Midwest, US Northeast, US Pacific, US South, US West and
-#'   all US states. Finally, level = 3L correspond to the subregions of each
-#'   state (or each level 2 zone). For example the West Yorkshire, which is a
-#'   subregion of England, is a level 3 zone. This field is used only for
-#'   matching operations in case of spatial input. The oe_* functions will
-#'   select the geographical area closest to the input place with the highest
-#'   "level"}
+#'   all US states. Level = 3L correspond to the subregions of each state (or
+#'   each level 2 zone). For example the West Yorkshire, which is a subregion of
+#'   England, is a level 3 zone. Finally, level = 4L correspond to the
+#'   subregions of the third level and it is mainly related to some small areas
+#'   in Germany. This field is used only for matching operations in case of
+#'   spatial input.}
 #'   \item{iso3166-1_alpha2}{A character vector of two-letter [ISO3166-1
 #'   codes](https://en.wikipedia.org/wiki/ISO_3166-1_alpha-2). This will be set
 #'   on the smallest extract that still fully (or mostly) contains the entity
@@ -54,7 +54,7 @@
 #'   file).}
 #'   \item{geometry}{The sfc for that geographical region. These are not the
 #'   country boundaries but a buffer around countries.}
-#'   \item{pbf_size_size}{Size of the `.pbf` file in bytes.}
+#'   \item{pbf_file_size}{Size of the `.pbf` file in bytes.}
 #' }
 #'
 #' @family provider's-database
@@ -73,7 +73,7 @@
 #'   \item{name}{The, usually English, long-form name of the city.}
 #'   \item{last_modified}{When was it last modified?}
 #'   \item{type}{empty}
-#'   \item{pbf_size_size}{Size of the pbf file in bytes.}
+#'   \item{pbf_file_size}{Size of the pbf file in bytes.}
 #'   \item{base_url}{The base URL for the city.}
 #'   \item{poly_url}{The `.poly` file location.}
 #'   \item{pbf}{Link to the latest `.osm.pbf` file for this region.}
@@ -82,7 +82,7 @@
 #'   matching operations in case of spatial input. The oe_* functions will
 #'   select the geographical area closest to the input place with the highest
 #'   "level". See [geofabrik_zones] for an example of a hierarchical structure.}
-#'   \item{geometry}{The `sfc` for that geographical region, rectangular.}
+#'   \item{geometry}{The `sfg` for that geographical region, rectangular.}
 #' }
 #'
 #' @family provider's-database
@@ -99,17 +99,15 @@
 #' \describe{
 #'   \item{id}{A unique ID for each area. It is used by `oe_update()`.}
 #'   \item{name}{The, usually English, long-form name of the city.}
-#'   \item{parent}{The ID identifier of the next larger excerpts that contains
+#'   \item{parent}{The identifier of the next larger excerpts that contains
 #'   this one, if present.}
 #'   \item{level}{An integer code between 1 and 4. Check
 #'   <http://download.openstreetmap.fr/polygons/> to see the hierarchical
 #'   structure of the zones. 1L correspond to the biggest areas. This is used
-#'   only for matching operations in case of spatial input. The oe_* functions
-#'   will select the geographical area closest to the input place with the
-#'   highest "level"}
+#'   only for matching operations in case of spatial input.}
 #'   \item{pbf}{Link to the latest `.osm.pbf` file for this region.}
-#'   \item{pbf_size_size}{Size of the pbf file in bytes.}
-#'   \item{geometry}{The `sfc`` for that geographical region, rectangular.}
+#'   \item{pbf_file_size}{Size of the pbf file in bytes.}
+#'   \item{geometry}{The `sfg` for that geographical region, rectangular.}
 #' }
 #'
 #' @family provider's-database
